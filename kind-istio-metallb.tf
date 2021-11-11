@@ -89,6 +89,6 @@ module "kind-istio-metallb" {
             sampling: 100
             max_path_tag_length: 99999
             zipkin:
-              address: otel-collector.tracing.svc:9411
+              address: opentelemetry-collector.tracing.svc:9411
   EOF
 }

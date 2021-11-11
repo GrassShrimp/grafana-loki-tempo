@@ -7,11 +7,11 @@ resource "kubernetes_namespace" "tracing" {
   ]
 }
 resource "helm_release" "tempo" {
-  name              = "tempo"
-  repository        = "https://grafana.github.io/helm-charts" 
-  chart             = "tempo"
-  version           = var.TEMPO_VERSION
-  namespace         = kubernetes_namespace.tracing.metadata[0].name
+  name       = "tempo"
+  repository = "https://grafana.github.io/helm-charts"
+  chart      = "tempo"
+  version    = var.TEMPO_VERSION
+  namespace  = kubernetes_namespace.tracing.metadata[0].name
   values = [
     <<EOF
     tempo:
@@ -21,56 +21,60 @@ resource "helm_release" "tempo" {
   ]
 }
 resource "helm_release" "loki" {
-  name              = "loki"
-  repository        = "https://grafana.github.io/helm-charts" 
-  chart             = "loki"
-  version           = var.LOKI_VERSION
-  namespace         = kubernetes_namespace.tracing.metadata[0].name
+  name       = "loki"
+  repository = "https://grafana.github.io/helm-charts"
+  chart      = "loki"
+  version    = var.LOKI_VERSION
+  namespace  = kubernetes_namespace.tracing.metadata[0].name
 }
-resource "null_resource" "otel" {
-  provisioner "local-exec" {
-    command = "kubectl apply -n ${kubernetes_namespace.tracing.metadata[0].name} -f https://raw.githubusercontent.com/antonioberben/examples/master/opentelemetry-collector/otel.yaml"
-  }
-  depends_on = [
-    helm_release.tempo,
-    helm_release.loki
-  ]
-}
-resource "kubernetes_config_map" "otel_collector_conf" {
-  metadata {
-    name = "otel-collector-conf"
-    namespace = kubernetes_namespace.tracing.metadata[0].name
-    labels = {
-      app = "opentelemetry"
-      component = "otel-collector-conf"
-    }
-  }
-  data = {
-    otel-collector-config = <<EOF
-    receivers:
-      zipkin:
-        endpoint: 0.0.0.0:9411
-    exporters:
+resource "helm_release" "opentelemetry-collector" {
+  name          = "opentelemetry-collector"
+  repository    = "https://open-telemetry.github.io/opentelemetry-helm-charts"
+  chart         = "opentelemetry-collector"
+  version       = var.OPENTELEMETRY_COLLECTOR_VERSION
+  namespace     = kubernetes_namespace.tracing.metadata[0].name
+  values = [
+    <<EOF
+    config:
+      receivers:
+        zipkin:
+          endpoint: 0.0.0.0:9411
+      exporters:
+        otlp:
+          endpoint: ${helm_release.tempo.name}.${kubernetes_namespace.tracing.metadata[0].name}.svc.cluster.local:55680
+          tls:
+            insecure: true
+      service:
+        pipelines:
+          traces:
+            receivers: [zipkin]
+            exporters: [otlp]
+    ports:
       otlp:
-        endpoint: ${helm_release.tempo.name}.${kubernetes_namespace.tracing.metadata[0].name}.svc.cluster.local:55680
-        insecure: true
-    service:
-      pipelines:
-        traces:
-          receivers: [zipkin]
-          exporters: [otlp]
+        enabled: true
+        containerPort: 55680
+        servicePort: 55680
+        hostPort: 55680
+        protocol: TCP
+      zipkin:
+        enabled: true
+        containerPort: 9411
+        servicePort: 9411
+        hostPort: 9411
+        protocol: TCP
+    agentCollector:
+      enabled: false
+    standaloneCollector:
+      enabled: true
     EOF
-  }
-  depends_on = [
-    null_resource.otel
   ]
 }
 resource "helm_release" "fluent-bit" {
-  name              = "fluent-bit"
-  repository        = "https://fluent.github.io/helm-charts" 
-  chart             = "fluent-bit"
-  version           = var.FLUENT_BIT_VERSION
-  namespace         = kubernetes_namespace.tracing.metadata[0].name
+  name       = "fluent-bit"
+  repository = "https://fluent.github.io/helm-charts"
+  chart      = "fluent-bit"
+  version    = var.FLUENT_BIT_VERSION
+  namespace  = kubernetes_namespace.tracing.metadata[0].name
   values = [
     <<EOF
     logLevel: trace
@@ -113,15 +117,14 @@ resource "helm_release" "fluent-bit" {
   depends_on = [
     helm_release.tempo,
     helm_release.loki,
-    null_resource.otel
   ]
 }
 resource "helm_release" "grafana" {
-  name              = "grafana"
-  repository        = "https://grafana.github.io/helm-charts" 
-  chart             = "grafana"
-  version           = var.GRAFANA_VERSION
-  namespace         = kubernetes_namespace.tracing.metadata[0].name
+  name       = "grafana"
+  repository = "https://grafana.github.io/helm-charts"
+  chart      = "grafana"
+  version    = var.GRAFANA_VERSION
+  namespace  = kubernetes_namespace.tracing.metadata[0].name
   values = [
     <<EOF
     datasources:
@@ -195,6 +198,6 @@ resource "local_file" "grafana_route" {
   EOF
   filename = "${path.root}/configs/grafana_route.yaml"
   provisioner "local-exec" {
-    command = "kubectl apply -f ${self.filename} --namespace ${kubernetes_namespace.tracing.metadata[0].name}"
+    command = "kubectl --context ${module.kind-istio-metallb.config_context} apply -f ${self.filename} --namespace ${kubernetes_namespace.tracing.metadata[0].name}"
   }
 }

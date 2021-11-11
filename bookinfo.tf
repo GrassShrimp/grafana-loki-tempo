@@ -7,8 +7,16 @@ resource "kubernetes_namespace" "bookinfo" {
   }
 }
 resource "null_resource" "bookinfo" {
+  triggers = {
+    context = module.kind-istio-metallb.config_context
+    namespace = kubernetes_namespace.bookinfo.metadata[0].name
+  }
   provisioner "local-exec" {
-    command = "kubectl --context ${module.kind-istio-metallb.config_context} apply -f https://raw.githubusercontent.com/istio/istio/release-1.11/samples/bookinfo/platform/kube/bookinfo.yaml --namespace ${kubernetes_namespace.bookinfo.metadata[0].name}"
+    command = "kubectl --context ${self.triggers.context} apply -f https://raw.githubusercontent.com/istio/istio/release-1.11/samples/bookinfo/platform/kube/bookinfo.yaml --namespace ${self.triggers.namespace}"
+  }
+  provisioner "local-exec" {
+    when = destroy
+    command = "kubectl --context ${self.triggers.context} delete -f https://raw.githubusercontent.com/istio/istio/release-1.11/samples/bookinfo/platform/kube/bookinfo.yaml --namespace ${self.triggers.namespace}"
   }
   depends_on = [
     module.kind-istio-metallb
@@ -53,7 +61,7 @@ resource "local_file" "bookinfo_route" {
   EOF
   filename = "${path.root}/configs/bookinfo_route.yaml"
   provisioner "local-exec" {
-    command = "kubectl apply -f ${self.filename} --namespace ${kubernetes_namespace.bookinfo.metadata[0].name}"
+    command = "kubectl --context ${module.kind-istio-metallb.config_context} apply -f ${self.filename} --namespace ${kubernetes_namespace.bookinfo.metadata[0].name}"
   }
   depends_on = [
     module.kind-istio-metallb,

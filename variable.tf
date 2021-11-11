@@ -19,3 +19,6 @@ variable "FLUENT_BIT_VERSION" {
 variable "GRAFANA_VERSION" {
   type = string
 }
+variable "OPENTELEMETRY_COLLECTOR_VERSION" {
+  type = string
+}
