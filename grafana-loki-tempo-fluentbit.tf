@@ -152,7 +152,7 @@ resource "helm_release" "grafana" {
             - datasourceName: Tempo
               matcherRegex: "traceID=(\\w+)"
               name: TraceID
-              url: "$${__value.raw}"
+              url: "$$${__value.raw}"
               datasourceUid: tempo
     env:
       JAEGER_AGENT_PORT: 6831
