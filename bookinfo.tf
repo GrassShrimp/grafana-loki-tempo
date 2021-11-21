@@ -5,6 +5,9 @@ resource "kubernetes_namespace" "bookinfo" {
       "istio-injection" = "enabled"
     }
   }
+  depends_on = [
+    module.kind-istio-metallb
+  ]
 }
 resource "null_resource" "bookinfo" {
   triggers = {
@@ -18,9 +21,6 @@ resource "null_resource" "bookinfo" {
     when = destroy
     command = "kubectl --context ${self.triggers.context} delete -f https://raw.githubusercontent.com/istio/istio/release-1.11/samples/bookinfo/platform/kube/bookinfo.yaml --namespace ${self.triggers.namespace}"
   }
-  depends_on = [
-    module.kind-istio-metallb
-  ]
 }
 resource "local_file" "bookinfo_route" {
   content  = <<-EOF
@@ -64,7 +64,6 @@ resource "local_file" "bookinfo_route" {
     command = "kubectl --context ${module.kind-istio-metallb.config_context} apply -f ${self.filename} --namespace ${kubernetes_namespace.bookinfo.metadata[0].name}"
   }
   depends_on = [
-    module.kind-istio-metallb,
     null_resource.bookinfo
   ]
 }
