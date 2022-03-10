@@ -1,5 +1,13 @@
 terraform {
   required_providers {
+    curl = {
+      source = "anschoewe/curl"
+      version = "0.1.4"
+    }
+    kubectl = {
+      source = "gavinbunney/kubectl"
+      version = "1.13.1"
+    }
     external = {
       source  = "hashicorp/external"
       version = "2.1.0"
@@ -27,4 +35,8 @@ provider "helm" {
     config_context = module.kind-istio-metallb.config_context
     config_path    = "~/.kube/config"
   }
+}
+provider "kubectl" {
+  config_context = module.kind-istio-metallb.config_context
+  config_path    = "~/.kube/config"
 }

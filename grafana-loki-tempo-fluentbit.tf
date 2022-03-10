@@ -28,11 +28,11 @@ resource "helm_release" "loki" {
   namespace  = kubernetes_namespace.tracing.metadata[0].name
 }
 resource "helm_release" "opentelemetry-collector" {
-  name          = "opentelemetry-collector"
-  repository    = "https://open-telemetry.github.io/opentelemetry-helm-charts"
-  chart         = "opentelemetry-collector"
-  version       = var.OPENTELEMETRY_COLLECTOR_VERSION
-  namespace     = kubernetes_namespace.tracing.metadata[0].name
+  name       = "opentelemetry-collector"
+  repository = "https://open-telemetry.github.io/opentelemetry-helm-charts"
+  chart      = "opentelemetry-collector"
+  version    = var.OPENTELEMETRY_COLLECTOR_VERSION
+  namespace  = kubernetes_namespace.tracing.metadata[0].name
   values = [
     <<EOF
     config:
@@ -163,41 +163,42 @@ resource "helm_release" "grafana" {
     EOF
   ]
 }
-resource "local_file" "grafana_route" {
-  content  = <<-EOF
-  apiVersion: networking.istio.io/v1beta1
-  kind: Gateway
-  metadata:
-    name: grafana
-  spec:
-    selector:
-      istio: ingressgateway
-    servers:
-    - port:
-        number: 80
-        name: http
-        protocol: HTTP
+resource "kubectl_manifest" "grafana_route" {
+  for_each = {
+    grafana-gateway        = <<EOF
+    apiVersion: networking.istio.io/v1beta1
+    kind: Gateway
+    metadata:
+      name: grafana
+    spec:
+      selector:
+        istio: ingressgateway
+      servers:
+      - port:
+          number: 80
+          name: http
+          protocol: HTTP
+        hosts:
+        - grafana.${module.kind-istio-metallb.ingress_ip_address}.nip.io
+    EOF
+    grafana-virtualservice = <<EOF
+    apiVersion: networking.istio.io/v1beta1
+    kind: VirtualService
+    metadata:
+      name: grafana
+    spec:
       hosts:
       - grafana.${module.kind-istio-metallb.ingress_ip_address}.nip.io
-  ---
-  apiVersion: networking.istio.io/v1beta1
-  kind: VirtualService
-  metadata:
-    name: grafana
-  spec:
-    hosts:
-    - grafana.${module.kind-istio-metallb.ingress_ip_address}.nip.io
-    gateways:
-    - grafana
-    http:
-    - route:
-      - destination:
-          host: ${helm_release.grafana.name}.${kubernetes_namespace.tracing.metadata[0].name}.svc.cluster.local
-          port:
-            number: 80
-  EOF
-  filename = "${path.root}/configs/grafana_route.yaml"
-  provisioner "local-exec" {
-    command = "kubectl --context ${module.kind-istio-metallb.config_context} apply -f ${self.filename} --namespace ${kubernetes_namespace.tracing.metadata[0].name}"
+      gateways:
+      - grafana
+      http:
+      - route:
+        - destination:
+            host: ${helm_release.grafana.name}.${kubernetes_namespace.tracing.metadata[0].name}.svc.cluster.local
+            port:
+              number: 80
+    EOF
   }
+  yaml_body          = each.value
+  override_namespace = kubernetes_namespace.tracing.metadata[0].name
 }
